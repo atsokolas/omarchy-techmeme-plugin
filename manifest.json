@@ -1,0 +1,71 @@
+{
+  "schemaVersion": 1,
+  "id": "atsokolas.techmeme",
+  "name": "Techmeme",
+  "version": "1.0.0",
+  "author": "atsokolas",
+  "license": "MIT",
+  "description": "The tech front page, live on the Omarchy bar.",
+  "kinds": [
+    "service",
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "service": "Service.qml",
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "Techmeme",
+    "description": "The top headline on the bar; the front page, with links and discussion, in the panel.",
+    "category": "Info",
+    "aliases": [
+      "techmeme",
+      "news",
+      "tech",
+      "headlines",
+      "feed"
+    ],
+    "allowMultiple": false,
+    "defaultSection": "right",
+    "defaults": {
+      "showHeadline": true,
+      "headlineLength": 38,
+      "stories": 12,
+      "notify": false
+    },
+    "schema": [
+      {
+        "key": "showHeadline",
+        "type": "boolean",
+        "label": "Headline on the bar",
+        "defaultValue": true,
+        "description": "Show the top story beside the mark, or just the mark."
+      },
+      {
+        "key": "headlineLength",
+        "type": "integer",
+        "label": "Bar text length",
+        "min": 16,
+        "max": 90,
+        "step": 2,
+        "defaultValue": 38,
+        "description": "How much of the headline fits on the bar before it is trimmed to a word boundary."
+      },
+      {
+        "key": "stories",
+        "type": "integer",
+        "label": "Stories in the panel",
+        "min": 5,
+        "max": 20,
+        "step": 1,
+        "defaultValue": 12
+      },
+      {
+        "key": "notify",
+        "type": "boolean",
+        "label": "Notify on a new top story",
+        "defaultValue": false
+      }
+    ]
+  }
+}
