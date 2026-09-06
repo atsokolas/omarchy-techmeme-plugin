@@ -33,16 +33,19 @@ one any reader does.
 ## Install
 
 ```bash
-git clone https://github.com/atsokolas/omarchy-techmeme-plugin \
-  ~/.config/omarchy/plugins/atsokolas.techmeme
-omarchy restart shell
+omarchy plugin add https://github.com/atsokolas/omarchy-techmeme-plugin.git --enable
 ```
 
-Then add **Techmeme** to the bar: open the bar's settings, or add the entry to
-the right section of `~/.config/omarchy/shell.json` yourself:
+That clones the plugin into `~/.config/omarchy/plugins/atsokolas.techmeme`, validates it against the shell's manifest schema, and puts it on the bar. Move it if it did not land where you want:
 
-```json
-{ "id": "atsokolas.techmeme" }
+```bash
+omarchy bar move atsokolas.techmeme --section right --before omarchy.network
+```
+
+Pull later changes with:
+
+```bash
+omarchy plugin update atsokolas.techmeme
 ```
 
 ## Keys and clicks
@@ -121,12 +124,9 @@ entities, trimming for the bar, relative times, and the unread count.
 ## Remove
 
 ```bash
-rm -rf ~/.config/omarchy/plugins/atsokolas.techmeme
-omarchy restart shell
+omarchy plugin disable atsokolas.techmeme
+omarchy plugin remove atsokolas.techmeme --yes
 ```
-
-Then remove the `atsokolas.techmeme` entry from `~/.config/omarchy/shell.json`
-if you added one.
 
 ## License
 
