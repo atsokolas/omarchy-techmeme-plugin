@@ -26,14 +26,17 @@ Panel {
   readonly property var barIdentity: hostWidget || root
 
   // ---- ink and paper ------------------------------------------------------
-  // Bound to the theme singleton rather than copied out of it, so switching
-  // themes repaints the page live.
-  readonly property color ink: bar ? bar.foreground : Color.foreground
-  readonly property color paper: mix(Color.popups.background, ink, 0.045)
+  // Bound to the theme palette the service watches, so switching themes
+  // repaints the page live. (The shell's Color singleton isn't visible to
+  // third-party plugins.)
+  readonly property var palette: service ? service.palette : null
+  readonly property color accent: palette ? palette.accent : ink
+  readonly property color ink: bar ? bar.foreground : (palette ? palette.foreground : "#cccccc")
+  readonly property color paper: mix(palette ? palette.background : "#1a1a1a", ink, 0.045)
   readonly property color dim: Qt.rgba(ink.r, ink.g, ink.b, 0.62)
   readonly property color faint: Qt.rgba(ink.r, ink.g, ink.b, 0.34)
   // A wire light is red where the theme has a red to spare.
-  readonly property color live: Color.urgent
+  readonly property color live: palette ? palette.red : accent
 
   function mix(a, b, t) {
     return Qt.rgba(a.r + (b.r - a.r) * t, a.g + (b.g - a.g) * t, a.b + (b.b - a.b) * t, 1)
@@ -291,7 +294,7 @@ Panel {
             PanelActionButton {
               iconText: "󰑐"
               tooltipText: "Refresh (r)"
-              foreground: root.service.loading ? Color.accent : root.dim
+              foreground: root.service.loading ? root.accent : root.dim
               fontFamily: root.fontFamily
               onClicked: root.refresh()
             }
@@ -299,7 +302,7 @@ Panel {
             PanelActionButton {
               iconText: "󰆏"
               tooltipText: "Copy the story (c)"
-              foreground: copiedTimer.running ? Color.accent : root.dim
+              foreground: copiedTimer.running ? root.accent : root.dim
               fontFamily: root.fontFamily
               onClicked: root.copyCurrent()
             }
@@ -387,7 +390,7 @@ Panel {
                 var line = "LIVE · " + Model.pressLine(root.stories.length, root.service.updated, root.now)
                 return root.service.unread > 0 ? line + " · " + root.service.unread + " NEW" : line
               }
-              color: copiedTimer.running || root.service.error !== "" ? Color.accent : root.dim
+              color: copiedTimer.running || root.service.error !== "" ? root.accent : root.dim
               font.family: root.fontFamily
               font.pixelSize: Style.font.caption
               font.letterSpacing: 0.8
@@ -441,7 +444,7 @@ Panel {
               fontFamily: root.fontFamily
               ink: root.ink
               paper: root.paper
-              accent: Color.accent
+              accent: root.accent
               now: root.now
 
               onClicked: { root.selected = 0; root.readCurrent() }
@@ -465,7 +468,7 @@ Panel {
                 fontFamily: root.fontFamily
                 ink: root.ink
                 paper: root.paper
-                accent: Color.accent
+                accent: root.accent
                 now: root.now
 
                 onClicked: { root.selected = index + 1; root.readCurrent() }

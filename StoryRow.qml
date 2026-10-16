@@ -15,9 +15,9 @@ Item {
   // The paper's two faces, handed down so every story is set the same.
   property string serif: "serif"
   property string fontFamily: Style.font.family
-  property color ink: Color.foreground
-  property color paper: Color.background
-  property color accent: Color.accent
+  property color ink: "#cccccc"
+  property color paper: "#1a1a1a"
+  property color accent: ink
   // Ticks in the panel, so "12m" ages while the page is open.
   property real now: Date.now()
 

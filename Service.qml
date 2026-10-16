@@ -173,4 +173,17 @@ Item {
   }
 
   Component.onCompleted: if (active) load()
+
+  // The theme's palette, read from colors.toml and kept current.
+  readonly property string colorsPath: Quickshell.env("HOME") + "/.local/state/omarchy/current/theme/colors.toml"
+  property var palette: null
+
+  FileView {
+    path: root.colorsPath
+    watchChanges: true
+    printErrors: false
+    onLoaded: root.palette = Model.parseColors(text())
+    onLoadFailed: root.palette = null
+    onFileChanged: reload()
+  }
 }

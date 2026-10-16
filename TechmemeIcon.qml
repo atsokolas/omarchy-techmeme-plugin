@@ -9,7 +9,7 @@ Item {
   id: root
 
   property real iconSize: Style.font.icon
-  property color iconColor: Color.foreground
+  property color iconColor: "#cccccc"
   // 0..1, how much of the lead bar has been set. Driven by `refile()`.
   property real lead: 1
   // The dot that says the page moved while you were not looking.
