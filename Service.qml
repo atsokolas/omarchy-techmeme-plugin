@@ -43,6 +43,13 @@ Item {
   // reason is one IPC call away rather than a guess.
   property int lastExit: 0
 
+  // Thumbnails on disk, by the address the feed gave, once their bytes have
+  // been checked. The panel shows nothing else.
+  readonly property string imageDir: (Quickshell.env("XDG_CACHE_HOME") || (Quickshell.env("HOME") + "/.cache")) + "/omarchy-techmeme"
+  property var imageFiles: ({})
+  property bool _imagesAgain: false
+  property var _imageResults: []
+
   function setting(name, fallback) {
     var value = settings ? settings[name] : undefined
     return value === undefined || value === null ? fallback : value
@@ -90,6 +97,38 @@ Item {
     items = parsed.items
     if (first && seenAt === 0) seenAt = Date.now()
     announce(first)
+    loadImages()
+  }
+
+  // Only pictures not already checked this session go to the helper, so a
+  // refresh that finds the same page starts no process at all.
+  function loadImages() {
+    if (imageProcess.running || commitProcess.running) { _imagesAgain = true; return }
+    var wanted = []
+    for (var i = 0; i < items.length; i++) {
+      var url = items[i].imageUrl
+      if (url !== "" && imageFiles[url] === undefined) wanted.push(url)
+    }
+    if (wanted.length === 0) return
+    imageProcess.wanted = wanted
+    imageProcess.command = Model.imageFetchCommand(imageDir, wanted)
+    imageProcess.running = true
+  }
+
+  function imagesCommitted() {
+    var files = {}
+    for (var key in imageFiles) files[key] = imageFiles[key]
+    var passed = {}
+    for (var i = 0; i < _imageResults.length; i++) if (_imageResults[i].ok) passed[_imageResults[i].name] = true
+    var wanted = imageProcess.wanted
+    for (var j = 0; j < wanted.length; j++) {
+      var name = Model.imageCacheName(wanted[j])
+      // A picture that failed is remembered as failed, so it is not asked
+      // for again every five minutes.
+      files[wanted[j]] = passed[name] ? "file://" + imageDir + "/" + name : ""
+    }
+    imageFiles = files
+    if (_imagesAgain) { _imagesAgain = false; loadImages() }
   }
 
   function announce(first) {
@@ -151,6 +190,24 @@ Item {
       root.lastExit = 0
       root.applyFeed(root._output)
     }
+  }
+
+  Process {
+    id: imageProcess
+    property var wanted: []
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: {
+        root._imageResults = Model.imageResults(text)
+        commitProcess.command = Model.imageCommitCommand(root.imageDir, root._imageResults)
+        commitProcess.running = true
+      }
+    }
+  }
+
+  Process {
+    id: commitProcess
+    onExited: root.imagesCommitted()
   }
 
   // A laptop that wakes with no network should not sit on yesterday's page

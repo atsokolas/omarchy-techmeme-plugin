@@ -222,6 +222,7 @@ BarWidget {
         clip: true
 
         Text {
+          textFormat: Text.PlainText
           id: headline
           width: parent.width
           y: (parent.height - height) / 2 + (1 - root.slide) * height

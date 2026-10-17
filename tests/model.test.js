@@ -163,14 +163,17 @@ test("commands pass untrusted text as arguments, never as script", () => {
 
 test("the fetch names itself and cannot be talked out of a timeout", () => {
   const command = Model.curlCommand(Model.FEED_URL, 1)
-  assert.equal(command[0], "curl")
-  assert.ok(command.includes("--max-time"))
+  assert.deepEqual(command.slice(0, 2), ["bash", "-c"])
+  // The URL, timeout, limit and name are arguments to the script, never part of it.
+  const [url, timeout, limit, agent] = command.slice(4)
+  assert.equal(url, Model.FEED_URL)
   // A timeout below the floor is raised to it; no timeout at all takes the default.
-  assert.equal(command[command.indexOf("--max-time") + 1], "4")
-  const fallback = Model.curlCommand(Model.FEED_URL)
-  assert.equal(fallback[fallback.indexOf("--max-time") + 1], "20")
-  assert.ok(command.some((part) => part.includes(Model.USER_AGENT)))
-  assert.equal(command[command.length - 1], Model.FEED_URL)
+  assert.equal(timeout, "4")
+  assert.equal(Model.curlCommand(Model.FEED_URL)[5], "20")
+  assert.equal(limit, String(Model.FEED_MAX_BYTES))
+  assert.equal(agent, Model.USER_AGENT)
+  assert.match(command[2], /--max-filesize "\$3"/)
+  assert.match(command[2], /--max-time "\$2"/)
 })
 
 test("a notification body that opens with a dash cannot be read as a flag", () => {

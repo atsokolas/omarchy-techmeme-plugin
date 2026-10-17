@@ -99,7 +99,7 @@ as part of the shell rather than a page pasted into it.
 ## Requirements
 
 - Omarchy Quattro with `omarchy-shell`
-- `curl` for the feed, `xdg-open` to open a story, `wl-copy` to copy one
+- `curl` and `bash` for the feed, `xdg-open` to open a story, `wl-copy` to copy one
 - A network connection; without one the panel keeps the last page it read and
   tries again every two minutes
 
@@ -107,9 +107,19 @@ as part of the shell rather than a page pasted into it.
 
 Stories come from [Techmeme's RSS feed](https://www.techmeme.com/feed.xml),
 fetched every five minutes and identified as `omarchy-techmeme/1.0`. Nothing
-about you is sent with the request. Thumbnails load from Techmeme's servers
-when a story has one. Nothing is written outside the widget's own entry in
-`shell.json`, and nothing is cached to disk.
+about you is sent with the request.
+
+Everything from the network is held to a limit before the shell sees it.
+The feed may be up to 2 MB, a hundred times its usual size, and anything
+larger is refused before it is parsed. Headlines, credits and deks are set as
+plain text, so markup in the feed shows as the characters it is. Stories open
+only over https, and the permalink only on techmeme.com.
+
+Thumbnails come only from Techmeme's own `/YYMMDD/iNN.jpg` addresses, four
+at a time, each up to 512 KB and 2048 pixels on a side. They are saved under
+`~/.cache/omarchy-techmeme/` (readable only by you), checked by their bytes
+before they are shown, and cleared after a week. Nothing else is written
+outside the widget's own entry in `shell.json`.
 
 ## Tests
 
@@ -119,7 +129,10 @@ when a story has one. Nothing is written outside the widget's own entry in
 
 Covers the parts that are pure: parsing the feed, splitting a headline from
 its credit, finding the publisher's link among Techmeme's own, decoding
-entities, trimming for the bar, relative times, and the unread count.
+entities, trimming for the bar, relative times, and the unread count; and
+the limits: oversized feeds and pictures, links that are not https, picture
+addresses off Techmeme, file names that could leave the cache, and markup in
+the feed reaching the page.
 
 ## Remove
 
@@ -127,6 +140,8 @@ entities, trimming for the bar, relative times, and the unread count.
 omarchy plugin disable atsokolas.techmeme
 omarchy plugin remove atsokolas.techmeme --yes
 ```
+
+The thumbnails can go too: `rm -r ~/.cache/omarchy-techmeme`.
 
 ## License
 

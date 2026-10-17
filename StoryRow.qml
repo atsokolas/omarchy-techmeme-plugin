@@ -9,6 +9,8 @@ Item {
   id: root
 
   property var story: null
+  // The checked copy on disk; the feed's address is never loaded directly.
+  property string imageSource: ""
   property bool selected: false
   property bool unread: false
   property bool lead: false
@@ -23,7 +25,7 @@ Item {
 
   readonly property color dim: Qt.rgba(ink.r, ink.g, ink.b, 0.62)
   readonly property color faint: Qt.rgba(ink.r, ink.g, ink.b, 0.40)
-  readonly property bool hasCut: story && String(story.imageUrl || "") !== ""
+  readonly property bool hasCut: imageSource !== ""
   readonly property bool showDek: (lead || selected) && story && story.snippet !== ""
 
   signal clicked()
@@ -92,9 +94,10 @@ Item {
         Image {
           anchors.fill: parent
           anchors.margins: 1
-          source: root.hasCut ? root.story.imageUrl : ""
+          source: root.imageSource
           fillMode: Image.PreserveAspectCrop
           sourceSize.width: 240
+          sourceSize.height: 160
           asynchronous: true
           cache: true
           smooth: true
@@ -104,6 +107,7 @@ Item {
       }
 
       Text {
+        textFormat: Text.PlainText
         id: headline
         anchors.left: parent.left
         anchors.right: cut.visible ? cut.left : parent.right
@@ -124,6 +128,7 @@ Item {
 
     // The byline, set small and spaced the way a paper sets a credit line.
     Text {
+      textFormat: Text.PlainText
       width: parent.width
       text: Model.sourceLine(root.story, root.now).toUpperCase()
       color: root.dim
@@ -134,6 +139,7 @@ Item {
     }
 
     Text {
+      textFormat: Text.PlainText
       width: parent.width
       visible: root.showDek
       text: root.story ? root.story.snippet : ""

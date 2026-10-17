@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "atsokolas.techmeme",
   "name": "Techmeme",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "author": "atsokolas",
   "license": "MIT",
   "description": "The tech front page, live on the Omarchy bar.",

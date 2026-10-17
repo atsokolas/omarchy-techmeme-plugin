@@ -13,6 +13,15 @@ var USER_AGENT = "omarchy-techmeme/1.0"
 // twenty in the panel is a scroll nobody finishes.
 var MAX_STORIES = 20
 
+// The feed runs to about twenty kilobytes and a thumbnail to under ten. The
+// limits sit a hundred and fifty times above that: room for a busy day, none
+// for a response that would fill the shell's memory or the disk.
+var FEED_MAX_BYTES = 2 * 1024 * 1024
+var IMAGE_MAX_BYTES = 512 * 1024
+// Thumbnails are about 140 pixels wide. A file that claims to be past this
+// is not a thumbnail, and is not decoded.
+var IMAGE_MAX_SIDE = 2048
+
 // ---- text ------------------------------------------------------------------
 
 var ENTITIES = {
@@ -103,30 +112,101 @@ function hrefs(html) {
   return out
 }
 
-// The permalink and the story are both in the description; the story is the
-// first link that is not Techmeme's own.
-function articleUrlFrom(html) {
-  var links = hrefs(html)
-  for (var i = 0; i < links.length; i++) {
-    if (!/^https?:\/\/(www\.)?techmeme\.com/i.test(links[i])) return links[i]
-  }
-  return ""
-}
-
-// Thumbnails come off Techmeme over plain http in the feed. Ask for them the
+// Links come off Techmeme over plain http as often as not. Ask for them the
 // way the rest of the plugin asks for everything.
 function secureUrl(value) {
   var url = String(value || "")
   return url.replace(/^http:\/\//i, "https://")
 }
 
+// The only links the plugin hands to a browser: https, a plain host, and
+// nothing a shell or a URL parser could read two ways.
+function httpsUrl(value) {
+  var url = secureUrl(collapse(value))
+  if (url.length > 2048) return ""
+  if (!/^https:\/\/[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?(:\d{1,5})?([/?#][^\s<>"'\\`\x00-\x1f\x7f]*)?$/.test(url)) return ""
+  return url
+}
+
+function techmemeUrl(value) {
+  var url = httpsUrl(value)
+  return /^https:\/\/www\.techmeme\.com([/?#]|$)/i.test(url) ? url : ""
+}
+
+// The permalink and the story are both in the description; the story is the
+// first link that is not Techmeme's own.
+function articleUrlFrom(html) {
+  var links = hrefs(html)
+  for (var i = 0; i < links.length; i++) {
+    if (/^https?:\/\/(www\.)?techmeme\.com/i.test(links[i])) continue
+    var url = httpsUrl(links[i])
+    if (url !== "") return url
+  }
+  return ""
+}
+
+// Techmeme keeps its thumbnails at one shape of address, the day and then the
+// story: /261016/i27.jpg. Nothing else is loaded, so the feed cannot point
+// the plugin at another host or another kind of file. The permalink pin,
+// under /img/, is furniture and falls outside the shape too.
+var IMAGE_URL = /^https:\/\/www\.techmeme\.com\/(\d{6})\/(i\d{1,4})\.(jpg|jpeg|png|gif)$/i
+
 function imageUrlFrom(html) {
   var found = String(html || "").match(/<img\b[^>]*?src\s*=\s*["']([^"']+)["'][^>]*>/i)
   if (!found) return ""
-  var url = decodeEntities(found[1])
-  // The permalink pin is furniture, not a picture of anything.
-  if (/\/img\//i.test(url)) return ""
-  return secureUrl(url)
+  var url = secureUrl(decodeEntities(found[1]))
+  return IMAGE_URL.test(url) ? url : ""
+}
+
+// Where a thumbnail is kept on disk, named from the parts the address was
+// checked for and never from the address itself, so no feed value reaches
+// a path.
+var IMAGE_NAME = /^[0-9]{6}-i[0-9]{1,4}\.(jpg|png|gif)$/
+
+function imageCacheName(url) {
+  var m = String(url || "").match(IMAGE_URL)
+  if (!m) return ""
+  var ext = m[3].toLowerCase()
+  return m[1] + "-" + m[2].toLowerCase() + "." + (ext === "jpeg" ? "jpg" : ext)
+}
+
+// What the bytes say the picture is, read from the head of the file as hex.
+// JPEG, PNG and GIF only; anything else, or a size past IMAGE_MAX_SIDE, is
+// refused before Qt decodes a pixel of it.
+function imageInfo(hex) {
+  var h = String(hex || "").toLowerCase()
+  if (!/^[0-9a-f]*$/.test(h)) return null
+  var bytes = Math.floor(h.length / 2)
+  var byte = function (i) { return parseInt(h.substr(i * 2, 2), 16) }
+  var info = null
+  if (h.indexOf("89504e470d0a1a0a") === 0 && bytes >= 24 && h.substr(24, 8) === "49484452") {
+    info = { type: "png",
+      width: byte(16) * 16777216 + byte(17) * 65536 + byte(18) * 256 + byte(19),
+      height: byte(20) * 16777216 + byte(21) * 65536 + byte(22) * 256 + byte(23) }
+  } else if (/^474946383[79]61/.test(h) && bytes >= 10) {
+    info = { type: "gif", width: byte(6) + byte(7) * 256, height: byte(8) + byte(9) * 256 }
+  } else if (h.indexOf("ffd8") === 0) {
+    // The size is in the frame header, after however many segments come
+    // first, so the segments are walked rather than an offset trusted.
+    var i = 2
+    while (i + 9 <= bytes) {
+      if (byte(i) !== 0xff) return null
+      var marker = byte(i + 1)
+      if (marker === 0xff) { i++; continue }
+      if (marker === 0x01 || (marker >= 0xd0 && marker <= 0xd8)) { i += 2; continue }
+      if (marker === 0xd9 || marker === 0xda) return null
+      var length = byte(i + 2) * 256 + byte(i + 3)
+      if (length < 2) return null
+      if (marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc) {
+        info = { type: "jpeg", height: byte(i + 5) * 256 + byte(i + 6), width: byte(i + 7) * 256 + byte(i + 8) }
+        break
+      }
+      i += 2 + length
+    }
+  }
+  if (!info || !(info.width > 0) || !(info.height > 0)) return null
+  if (info.width > IMAGE_MAX_SIDE || info.height > IMAGE_MAX_SIDE) return null
+  return info
 }
 
 // Techmeme sets the dek after an em dash. Without one the story is a headline
@@ -149,7 +229,7 @@ function normalizeItem(block) {
   var title = splitTitle(tagText(block, "title"))
   if (title.headline === "") return null
   var description = tagText(block, "description")
-  var link = collapse(decodeEntities(tagText(block, "link")))
+  var link = techmemeUrl(decodeEntities(tagText(block, "link")))
   var guid = collapse(decodeEntities(tagText(block, "guid")))
   return {
     id: guid !== "" ? guid : link,
@@ -315,6 +395,7 @@ function fetchError(exitCode, stderr) {
     if (http.charAt(0) === "5") return "Techmeme is having trouble (" + http + ")"
     return "Techmeme answered " + http
   }
+  if (code === 63 || code === 23) return "The feed came back larger than a front page can be"
   if (code === 6) return "Cannot resolve techmeme.com — no DNS"
   if (code === 7) return "Cannot connect to Techmeme — is the network up?"
   if (code === 28) return "Techmeme took too long to answer"
@@ -346,18 +427,87 @@ function numberSetting(value, fallback, min, max) {
 
 // ---- what runs -------------------------------------------------------------
 
+// The fetch, held to FEED_MAX_BYTES however the body arrives. curl refuses a
+// declared length past the limit and stops a chunked one that runs past it;
+// head stops it again in case curl does not, and the length is counted in
+// bytes before anything is printed. Over the limit exits 63, curl's own code
+// for it, and nothing reaches the parser.
+var FETCH_SCRIPT = 'set -o pipefail; export LC_ALL=C; ' +
+  'body=$(curl -fsSL --proto =https --proto-redir =https --max-redirs 3 --max-time "$2" --max-filesize "$3" ' +
+  '-H "User-Agent: $4" -H "Accept: application/rss+xml, application/xml" -- "$1" | head -c "$(($3 + 1))") || exit $?; ' +
+  '[ "${#body}" -le "$3" ] || exit 63; printf %s "$body"'
+
 function curlCommand(url, timeoutSec) {
   var timeout = String(Math.max(4, parseInt(timeoutSec, 10) || 20))
-  return [
-    "curl", "-fsSL", "--max-time", timeout,
-    "-H", "User-Agent: " + USER_AGENT,
-    "-H", "Accept: application/rss+xml, application/xml",
-    String(url || FEED_URL)
-  ]
+  return ["bash", "-c", FETCH_SCRIPT, "techmeme-fetch",
+    String(url || FEED_URL), timeout, String(FEED_MAX_BYTES), USER_AGENT]
+}
+
+// Thumbnails, fetched into a cache only this user can read: one curl, four
+// at a time over the same connection, each held to IMAGE_MAX_BYTES and to
+// ten seconds. New ones land in hidden part files, which curl removes if the
+// transfer fails or runs past the limit; anything still over the limit
+// afterwards, cached or new, is thrown away. The script prints a line per
+// picture, its name and then its first bytes as hex, and the service checks
+// what the bytes are before anything is moved into place or decoded.
+// Week-old pictures are cleared on the way in.
+var IMAGE_SCRIPT = 'export LC_ALL=C; dir=${1:?}; max=$2; ua=$3; shift 3; umask 077; mkdir -p -- "$dir" || exit 1; ' +
+  'find "$dir" -maxdepth 1 -type f -mmin +10080 -delete 2>/dev/null; ' +
+  'names=(); args=(); ' +
+  'while [ $# -ge 2 ]; do name=${1:?}; url=$2; shift 2; ' +
+  'case $name in *[!A-Za-z0-9.-]*|.*) continue;; esac; names+=("$name"); ' +
+  '[ -f "$dir/$name" ] || args+=(-o "$dir/.$name.part" --url "$url"); done; ' +
+  'if [ ${#args[@]} -gt 0 ]; then curl -fsS --proto =https --max-time 10 --max-filesize "$max" --remove-on-error ' +
+  '--parallel --parallel-max 4 -H "User-Agent: $ua" "${args[@]}" 2>/dev/null; fi; ' +
+  'for name in "${names[@]}"; do src="$dir/$name"; [ -f "$src" ] || src="$dir/.$name.part"; [ -f "$src" ] || continue; ' +
+  'size=$(wc -c < "$src"); ' +
+  'if [ "$size" -gt "$max" ] || [ "$size" -lt 16 ]; then rm -f -- "${src:?}"; continue; fi; ' +
+  'printf "%s " "$name"; od -An -v -tx1 -N 65536 -- "$src" | tr -d " \\n"; echo; done'
+
+function imageFetchCommand(dir, urls) {
+  var command = ["bash", "-c", IMAGE_SCRIPT, "techmeme-images", String(dir), String(IMAGE_MAX_BYTES), USER_AGENT]
+  var seen = {}
+  for (var i = 0; i < (urls || []).length; i++) {
+    var name = imageCacheName(urls[i])
+    if (name === "" || seen[name]) continue
+    seen[name] = true
+    command.push(name, urls[i])
+  }
+  return command
+}
+
+// What the fetch printed, read back into a verdict per picture.
+function imageResults(output) {
+  var lines = String(output || "").split("\n")
+  var out = []
+  for (var i = 0; i < lines.length; i++) {
+    var m = lines[i].match(/^(\S+) ([0-9a-f]*)$/)
+    if (!m || !IMAGE_NAME.test(m[1])) continue
+    out.push({ name: m[1], ok: imageInfo(m[2]) !== null })
+  }
+  return out
+}
+
+// A part file that passed is renamed into place, in one step, so Qt never
+// sees half a picture; one that failed is removed, and so is a cached file
+// that no longer passes.
+var COMMIT_SCRIPT = 'dir=${1:?}; shift; while [ $# -ge 2 ]; do verdict=$1; name=${2:?}; shift 2; ' +
+  'case $name in *[!A-Za-z0-9.-]*|.*) continue;; esac; ' +
+  'part="$dir/.$name.part"; ' +
+  'if [ -f "$part" ]; then if [ "$verdict" = ok ]; then mv -f -- "$part" "$dir/$name"; else rm -f -- "${part:?}"; fi; ' +
+  'elif [ "$verdict" != ok ]; then rm -f -- "${dir:?}/${name:?}"; fi; done'
+
+function imageCommitCommand(dir, results) {
+  var command = ["sh", "-c", COMMIT_SCRIPT, "techmeme-images", String(dir)]
+  for (var i = 0; i < (results || []).length; i++) {
+    if (!IMAGE_NAME.test(String(results[i].name))) continue
+    command.push(results[i].ok ? "ok" : "bad", results[i].name)
+  }
+  return command
 }
 
 function openCommand(url) {
-  var target = collapse(url)
+  var target = httpsUrl(url)
   return target === "" ? null : ["xdg-open", target]
 }
 
@@ -423,6 +573,16 @@ if (typeof module !== "undefined" && module.exports) {
     SITE_URL: SITE_URL,
     USER_AGENT: USER_AGENT,
     MAX_STORIES: MAX_STORIES,
+    FEED_MAX_BYTES: FEED_MAX_BYTES,
+    IMAGE_MAX_BYTES: IMAGE_MAX_BYTES,
+    IMAGE_MAX_SIDE: IMAGE_MAX_SIDE,
+    httpsUrl: httpsUrl,
+    techmemeUrl: techmemeUrl,
+    imageCacheName: imageCacheName,
+    imageInfo: imageInfo,
+    imageFetchCommand: imageFetchCommand,
+    imageResults: imageResults,
+    imageCommitCommand: imageCommitCommand,
     decodeEntities: decodeEntities,
     stripTags: stripTags,
     collapse: collapse,

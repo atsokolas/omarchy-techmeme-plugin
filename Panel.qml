@@ -154,6 +154,11 @@ Panel {
                                     bottom - pageFlick.height + Style.space(6))
   }
 
+  function imageFor(story) {
+    if (!service || !story || story.imageUrl === "") return ""
+    return service.imageFiles[story.imageUrl] || ""
+  }
+
   function readCurrent() { service.openStory(current) }
   function discussCurrent() { service.openDiscussion(current) }
   function refresh() { service.refresh() }
@@ -261,6 +266,7 @@ Panel {
           implicitHeight: nameplate.implicitHeight + Style.space(6)
 
           Text {
+            textFormat: Text.PlainText
             id: nameplate
             anchors.horizontalCenter: parent.horizontalCenter
             anchors.top: parent.top
@@ -275,6 +281,7 @@ Panel {
           // The edition sits in the corner opposite the buttons, where a paper
           // prints its number and its price.
           Text {
+            textFormat: Text.PlainText
             anchors.left: parent.left
             anchors.top: parent.top
             anchors.topMargin: Style.space(4)
@@ -344,6 +351,7 @@ Panel {
           implicitHeight: dateline.implicitHeight
 
           Text {
+            textFormat: Text.PlainText
             id: dateline
             anchors.left: parent.left
             // The wire line has the right-hand side; the dateline takes what
@@ -382,6 +390,7 @@ Panel {
             }
 
             Text {
+              textFormat: Text.PlainText
               anchors.verticalCenter: parent.verticalCenter
               text: {
                 if (copiedTimer.running) return "COPIED"
@@ -421,6 +430,7 @@ Panel {
             width: pageFlick.width
 
             Text {
+              textFormat: Text.PlainText
               visible: root.stories.length === 0
               width: parent.width
               topPadding: Style.space(28)
@@ -437,6 +447,7 @@ Panel {
               id: leadBlock
               visible: root.stories.length > 0
               story: root.stories.length > 0 ? root.stories[0] : null
+              imageSource: root.imageFor(story)
               lead: true
               selected: root.selected === 0
               unread: root.seenMark > 0 && root.stories.length > 0 && Number(root.stories[0].published) > root.seenMark
@@ -462,6 +473,7 @@ Panel {
                 required property var modelData
 
                 story: modelData
+                imageSource: root.imageFor(modelData)
                 selected: root.selected === index + 1
                 unread: root.seenMark > 0 && Number(modelData.published) > root.seenMark
                 serif: root.serif
@@ -523,6 +535,7 @@ Panel {
               }
 
               Text {
+                textFormat: Text.PlainText
                 id: first
                 text: Model.crawlText(root.stories, 12)
                 color: root.dim
@@ -532,6 +545,7 @@ Panel {
               }
 
               Text {
+                textFormat: Text.PlainText
                 text: first.text
                 color: root.dim
                 font.family: root.fontFamily
@@ -544,6 +558,7 @@ Panel {
 
         // ---- the keys, set as a colophon
         Text {
+          textFormat: Text.PlainText
           Layout.fillWidth: true
           text: "J/K MOVE · ENTER READ · T DISCUSSION · C COPY · R REFRESH"
           color: root.faint
